@@ -11,7 +11,7 @@ namespace ErenshorBossTimers
     // The plugin name is what Lunaris sanitises into the command prefix
     // (name.Replace(" ","").ToLower()), so "RBT" gives /rbt. It is also the card
     // title, so the full name lives in the description below.
-    [LunarisPlugin("RBT", "1.0.2", "Ruly", "Ruly's Boss Timers - WeakAuras-style boss encounter alerts")]
+    [LunarisPlugin("RBT", "1.1.0", "Ruly", "Ruly's Boss Timers - WeakAuras-style boss encounter alerts")]
     [LunarisPermission(LunarisPermission.None)]
     public class BossTimersPlugin : LunarisPlugin
     {

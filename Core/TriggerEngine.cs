@@ -393,6 +393,85 @@ namespace ErenshorBossTimers.Core
                 // GENERIC (many mobs use them - 12 for the spell-resist variant),
                 // so as global auras they would spam. To use one on a specific boss,
                 // edit auras.json: set Enabled true and fill in Zone (see /rbt zone).
+                // ---- Tier 2 bosses from BOSS_REVIEW.md. Every telegraph below was
+                // read out of the game's own IL (or serialized PromptOnSpawn), not
+                // paraphrased, so the MatchPatterns are trustworthy. What is NOT
+                // known is timing: none of these has a measured pull yet, so the
+                // durations are "how long the alert lingers", never a claim about
+                // when the effect lands. Measure with fightlog before treating any
+                // of them as a countdown.
+                //
+                // Zones are blank because these bosses' scene names have not been
+                // captured yet - run /rbt zone in each and fill them in. The lines
+                // are specific enough (they name the boss or a unique phrase) that
+                // firing globally is not a noise risk in the meantime. ----
+
+                // Zenith & Nadir, in Soluna's Celestial Plane. Mechanics read
+                // directly from ZenithNadirScript's IL:
+                //
+                //  - BalanceLife(): if |Zenith.CurrentHP - Nadir.CurrentHP| > 100000,
+                //    BOTH twins are set to the HIGHER of the two. Uneven damage is
+                //    undone, not merely penalised. The broadcast below is rate-limited
+                //    to once per 360s, so a second balance inside that window happens
+                //    SILENTLY - treat the bar as "it has happened at least once
+                //    recently", never as a per-occurrence count.
+                //  - CheckForSyz(): Syzygy spawns when NADIR (not Zenith) drops below
+                //    12% - a hardcoded GetCurHealthAsIntPercentage() < 12 - once per
+                //    attempt, guarded by SyzygySpawned.
+                //  - SpawnConstellations(): add waves on a repeating timer whose reset
+                //    value shortens sharply once Syzygy is up.
+                //
+                // Measured 2026-07-18 (session-20260718-155902): each twin has
+                // 5,850,000 max HP, so BalanceLife's 100,000 gap is only 1.71
+                // percentage points - the raid must hold the twins within ~1.7% of
+                // each other. Observed burn rate on Nadir was 0.160 %/s, which is
+                // what sizes the band below: 2% ~= 12.5s of lead, where 8% would
+                // have parked the bar on screen for ~50s.
+                //
+                // The 12% threshold is exact (source constant). The band is not:
+                // it comes from a 100%->90% window with the raid on one target, and
+                // DPS near 12% will differ once Syzygy and the faster constellation
+                // waves split the raid. Re-check with
+                // `fightlog.py hp --npc Nadir --at 12` once a pull actually gets there.
+                new AuraDefinition
+                {
+                    Name = "Syzygy approaching (Nadir 12%)",
+                    WatchNpcName = "Nadir",
+                    HpThresholdPercent = 12f,
+                    WarnWithinPercent = 2f,
+                    MaxTriggers = 1,
+                    ConfirmPattern = @"beyond your comprehension collides",
+                    Theme = "Warning",
+                    Zone = "Soluna's Celestial Plane"
+                },
+                new AuraDefinition { Name = "Syzygy spawned", MatchPattern = @"beyond your comprehension collides", StopPattern = @"(Syzygy has been slain|You have slain Syzygy)", DurationSeconds = 0f, Theme = "Danger", Zone = "Soluna's Celestial Plane" },
+                new AuraDefinition { Name = "Zenith/Nadir linked - balance damage", MatchPattern = @"The Universe interferes", DurationSeconds = 8f, Theme = "Warning", Zone = "Soluna's Celestial Plane" },
+                new AuraDefinition { Name = "Constellations spawned", MatchPattern = @"mixing the nearby stars", DurationSeconds = 6f, Theme = "Info", Zone = "Soluna's Celestial Plane" },
+
+                // Phantom. A genuine paired window: wards up, then wards down =
+                // the damage window. Persistent bar with a clean documented stop.
+                new AuraDefinition { Name = "Phantom wards up", MatchPattern = @"calls mysterious lights", StopPattern = @"wards have fallen", DurationSeconds = 0f, Theme = "Warning" },
+                new AuraDefinition { Name = "WARDS DOWN - damage window", MatchPattern = @"wards have fallen", DurationSeconds = 8f, Theme = "Info" },
+
+                // Siraethe. Deliberately a lingering alert, not a persistent bar:
+                // the ward mob's exact name is unconfirmed, and an aura with no
+                // reachable StopPattern hangs on screen for the rest of the fight.
+                new AuraDefinition { Name = "Siraethe - ward summoned", MatchPattern = @"summons a protective ward", DurationSeconds = 6f, Theme = "Info" },
+                new AuraDefinition { Name = "Siraethe empowered by wards", MatchPattern = @"draws power from her wards", DurationSeconds = 6f, Theme = "Danger" },
+
+                // One-off add spawns - one line, one alert, no repetition.
+                new AuraDefinition { Name = "Honsus - Executioner spawned", MatchPattern = @"Vithean Executioner just spawned", DurationSeconds = 6f, Theme = "Info" },
+                new AuraDefinition { Name = "Fallen Fernalla - fawns incoming", MatchPattern = @"AWAKEN, MY FAWNS", DurationSeconds = 6f, Theme = "Info" },
+                new AuraDefinition { Name = "Gloopa - slimes split", MatchPattern = @"slime splits into more slimes", DurationSeconds = 6f, Theme = "Info" },
+
+                // Inferno Twins - the interrupt cue.
+                new AuraDefinition { Name = "Twin energy transfer - interrupt", MatchPattern = @"concentrated energy form, and sends it", DurationSeconds = 6f, Theme = "Danger" },
+
+                // Astra's breath. The one Tier 2 alert that WANTS a real countdown
+                // (wind-up -> breath). Left as a linger until a pull is recorded;
+                // measure with: fightlog.py lead --from "begins to inhale" --to "cosmic breath"
+                new AuraDefinition { Name = "Astra - breath incoming", MatchPattern = @"begins to inhale again", DurationSeconds = 6f, Theme = "Danger" },
+
                 new AuraDefinition { Name = "Boss empowering (melee)", MatchPattern = @"has become more comfortable in battle", DurationSeconds = 6f, Theme = "Warning", Enabled = false },
                 new AuraDefinition { Name = "Boss empowering (spell resist)", MatchPattern = @"is learning to bypass your spell resistances", DurationSeconds = 6f, Theme = "Warning", Enabled = false }
             };
