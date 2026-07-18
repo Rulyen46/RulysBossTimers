@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Newtonsoft.Json;
 using Lunaris;
@@ -71,11 +72,13 @@ namespace ErenshorBossTimers.Core
                 {
                     var json = File.ReadAllText(ConfigPath);
                     _auras = JsonConvert.DeserializeObject<List<AuraDefinition>>(json) ?? new List<AuraDefinition>();
+                    MergeNewDefaults();
                 }
                 else
                 {
                     _auras = DefaultAuras();
                     Save();
+                    WriteSeenDefaults(DefaultAuras().Select(a => a.Name));
                 }
             }
             catch (Exception ex)
@@ -138,6 +141,108 @@ namespace ErenshorBossTimers.Core
         }
 
         private static bool IsFinite(float f) => !float.IsNaN(f) && !float.IsInfinity(f);
+
+        /// <summary>
+        /// Sidecar listing every DefaultAuras() name this install has already been
+        /// offered. Kept OUT of auras.json deliberately: that file deserialises as
+        /// a bare List&lt;AuraDefinition&gt;, and adding a metadata wrapper would
+        /// break every hand-edited file and every shared community pack.
+        /// </summary>
+        private static string SeenPath =>
+            Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "auras.seen.json");
+
+        /// <summary>
+        /// Adds auras introduced by a mod update into an existing auras.json,
+        /// matching on Name, so upgrading the DLL actually delivers new encounters.
+        /// Without this, `Load()` only writes defaults when the file is ABSENT, so
+        /// anyone who had ever run the mod kept their old aura set forever and new
+        /// bosses silently never fired.
+        ///
+        /// User edits win: an aura already present by Name is left exactly as it is,
+        /// including Enabled=false, retuned durations and custom colours.
+        ///
+        /// Deletions stick, via the sidecar. The first time this runs there is no
+        /// sidecar, so it cannot tell "the user deleted this" from "this is new" -
+        /// it adds every missing default once, then records the full default name
+        /// list. From then on a deleted aura stays deleted, because its name is
+        /// already marked seen. That one-time re-add is the deliberate cost of not
+        /// changing the auras.json schema; disabling via Enabled=false is unaffected
+        /// either way, and is what the docs recommend.
+        /// </summary>
+        private void MergeNewDefaults()
+        {
+            try
+            {
+                var defaults = DefaultAuras();
+                var seen = ReadSeenDefaults();
+                bool firstRun = seen.Count == 0;
+
+                var present = new HashSet<string>(
+                    _auras.Where(a => a != null && a.Name != null).Select(a => a.Name),
+                    StringComparer.OrdinalIgnoreCase);
+
+                var added = new List<string>();
+                foreach (var d in defaults)
+                {
+                    if (d == null || string.IsNullOrWhiteSpace(d.Name)) continue;
+                    if (present.Contains(d.Name)) continue;      // user already has it
+                    if (!firstRun && seen.Contains(d.Name)) continue;  // user removed it
+
+                    _auras.Add(d);
+                    added.Add(d.Name);
+                }
+
+                // Record the full default set either way, so the next update only
+                // has to consider names that are genuinely new.
+                WriteSeenDefaults(defaults.Where(d => d != null && d.Name != null).Select(d => d.Name));
+
+                if (added.Count == 0) return;
+
+                Save();
+                Log.Info($"[RBT] Added {added.Count} new aura(s) from this update: {string.Join(", ", added)}");
+            }
+            catch (Exception ex)
+            {
+                // A merge failure must never stop the mod loading - the user's
+                // existing auras are already in _auras and work fine without it.
+                Log.Info($"[RBT] Could not merge new default auras: {ex.Message}");
+            }
+        }
+
+        private static HashSet<string> ReadSeenDefaults()
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                if (!File.Exists(SeenPath)) return set;
+                var names = JsonConvert.DeserializeObject<List<string>>(File.ReadAllText(SeenPath));
+                if (names != null)
+                    foreach (var n in names)
+                        if (!string.IsNullOrWhiteSpace(n)) set.Add(n);
+            }
+            catch (Exception ex)
+            {
+                // Unreadable sidecar = treat as first run. Worst case is that a
+                // deleted default comes back once; that beats refusing to load.
+                Log.Info($"[RBT] Could not read {Path.GetFileName(SeenPath)}: {ex.Message}");
+            }
+            return set;
+        }
+
+        private static void WriteSeenDefaults(IEnumerable<string> names)
+        {
+            try
+            {
+                File.WriteAllText(SeenPath,
+                    JsonConvert.SerializeObject(names.Distinct().ToList(), Formatting.Indented));
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal: without the sidecar the next load simply re-offers
+                // the same defaults, which is annoying but not broken.
+                Log.Info($"[RBT] Could not write {Path.GetFileName(SeenPath)}: {ex.Message}");
+            }
+        }
 
         public void Save()
         {
