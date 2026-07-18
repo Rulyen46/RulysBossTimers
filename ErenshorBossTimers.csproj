@@ -1,0 +1,131 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- MUST be a .NET Framework target, not netstandard2.1. Under
+         netstandard2.1, netstandard.dll defines System.Numerics.Vector2/Vector4
+         itself and wins over any System.Numerics.Vectors reference, so ImGui
+         calls bind to the wrong type identity and throw MissingMethodException
+         at runtime. net48 has no such definitions, so the vector types resolve
+         to System.Numerics.Vectors 4.1.4.0 - the assembly Lunaris.Boot actually
+         loads. This matches Lunaris.dll and Erenshor.LootManager.dll (both net4.8). -->
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ErenshorBossTimers</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+
+    <!-- Compile against the game's own Mono BCL (below) rather than the SDK's
+         .NET Framework reference assemblies. That is what the code actually
+         runs on, and it keeps the SDK from injecting its own System.Numerics,
+         whose Vector2/Vector4 would collide with the System.Numerics.Vectors
+         ones ImGui.NET requires. Also clears the MSB3277 conflict warnings. -->
+    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+
+    <!-- ====== EDIT THESE TWO PATHS FOR YOUR MACHINE ====== -->
+    <ErenshorManagedDir>E:\SteamLibrary\steamapps\common\Erenshor\Erenshor_Data\Managed</ErenshorManagedDir>
+    <ErenshorPluginsDir>E:\SteamLibrary\steamapps\common\Erenshor\plugins</ErenshorPluginsDir>
+	<ErenshorRootDir>E:\SteamLibrary\steamapps\common\Erenshor</ErenshorRootDir>
+  </PropertyGroup>
+
+  <!-- Debug = the DEV build: adds the fight recorder and the /rbt record and
+       /rbt dump commands (Core/FightRecorder.cs), which write every chat line
+       to plugins\fights\session-*.jsonl for measuring aura timings.
+
+       Release = the PUBLIC build. RBT_DEV is undefined, so the recorder and both
+       commands are not compiled in at all - no file writing, nothing to disclose.
+       Build the shipping DLL with: dotnet build -c Release -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DefineConstants>$(DefineConstants);RBT_DEV</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Game + Unity assemblies. Filenames confirmed via decompiled Erenshor
+         mods online; if your Managed folder doesn't have exactly these
+         names, check what's actually there and adjust. -->
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(ErenshorManagedDir)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(ErenshorManagedDir)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ErenshorManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(ErenshorManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Lunaris itself + Harmony. These get auto-downloaded into the game's
+         plugins folder the first time you launch the game with Lunaris's
+         winhttp.dll installed - point HintPath there once that's happened. -->
+    <Reference Include="Lunaris">
+      <HintPath>$(ErenshorRootDir)\Lunaris.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>.\lib\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- ImGui.NET + Newtonsoft.Json come from LunarisLibs.zip, see README.
+         Extract it into a local .\lib\ folder next to this .csproj. -->
+    <Reference Include="ImGui.NET">
+      <HintPath>.\lib\ImGui.NET.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>.\lib\Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- REQUIRED, do not remove. ImGui.NET 1.88 takes its Vector2/Vector4
+         parameters from System.Numerics.Vectors 4.1.4.0, and Lunaris.Boot
+         loads that exact assembly at runtime from an embedded resource.
+         Without this reference the compiler silently binds Vector2/Vector4 to
+         netstandard.dll's copies instead. Those are a different type identity,
+         so every ImGui call taking a vector throws MissingMethodException at
+         runtime while compiling perfectly. AdventureGuide.dll (netstandard2.1,
+         works in-game) carries this same reference. -->
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>.\lib\System.Numerics.Vectors.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The game's Mono BCL. Deliberately does NOT include System.Numerics:
+         its Vector2/Vector4 would collide with System.Numerics.Vectors' and
+         resolve to the wrong type identity at runtime. -->
+    <Reference Include="mscorlib">
+      <HintPath>$(ErenshorManagedDir)\mscorlib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System">
+      <HintPath>$(ErenshorManagedDir)\System.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.Core">
+      <HintPath>$(ErenshorManagedDir)\System.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="lib\" />
+  </ItemGroup>
+
+  <!-- Auto-deploy to the game's plugins folder on every build. ContinueOnError
+       because the DLL is locked while Erenshor is running - if the copy fails,
+       the build still succeeds and the warning tells you to close the game. -->
+  <Target Name="DeployToPlugins" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetPath)"
+          DestinationFolder="$(ErenshorPluginsDir)"
+          ContinueOnError="WarnAndContinue" />
+    <Message Importance="high" Text="Deployed $(TargetFileName) -> $(ErenshorPluginsDir)" />
+  </Target>
+
+</Project>

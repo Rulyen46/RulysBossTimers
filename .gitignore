@@ -1,0 +1,25 @@
+# Build output. The shipping DLL is published as a GitHub Release asset, never
+# committed - that is what keeps the dev build (which contains the fight
+# recorder) out of the public repo.
+bin/
+obj/
+*.dll
+*.pdb
+
+# IDE / OS
+.vs/
+.idea/
+*.user
+*.suo
+Thumbs.db
+desktop.ini
+
+# Third-party assemblies from LunarisLibs.zip (0Harmony, ImGui.NET,
+# Newtonsoft.Json, System.Numerics.Vectors). Not ours to redistribute - the
+# README tells builders where to get them.
+lib/
+
+# Recorded fight data - dev only, and it contains whatever your group typed
+# in chat.
+fights/
+*.jsonl
