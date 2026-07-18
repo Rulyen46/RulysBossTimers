@@ -38,6 +38,33 @@
     <DefineConstants>$(DefineConstants);RBT_DEV</DefineConstants>
   </PropertyGroup>
 
+  <!-- Ties this DLL to its Erenshor Vault page. Lunaris resolves a plugin's
+       identity via PluginAssemblyUtils.GetGuid, which looks for exactly this
+       attribute - [assembly: AssemblyMetadata("LunarisPluginId", <slug>)] - and
+       falls back to the plugin type's FullName when it is missing. That fallback
+       is why the globe icon linked to /mod/ErenshorBossTimers.BossTimersPlugin
+       instead of /mod/rulys-boss-timers-rbt.
+
+       Lunaris injects this attribute itself when a plugin is installed through
+       the Vault, but a plain `dotnet build` overwrites the deployed DLL and
+       strips it again, and anyone who hand-drops the GitHub DLL never gets it.
+       Declaring it here bakes it into every build. The value must match the
+       Vault page slug exactly. -->
+  <!-- tools\ holds dev-only helper projects (PluginScan) and scripts. They must
+       be excluded from this project's default **/*.cs glob: once PluginScan has
+       been built, its obj\ contains a generated AssemblyInfo.cs, and compiling
+       that alongside our own produces a wall of CS0579 "duplicate attribute"
+       errors that point at obj\ and look nothing like the real cause. -->
+  <ItemGroup>
+    <Compile Remove="tools\**" />
+    <None Remove="tools\**" />
+    <EmbeddedResource Remove="tools\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="LunarisPluginId" Value="rulys-boss-timers-rbt" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Game + Unity assemblies. Filenames confirmed via decompiled Erenshor
          mods online; if your Managed folder doesn't have exactly these
@@ -118,10 +145,17 @@
     <Folder Include="lib\" />
   </ItemGroup>
 
-  <!-- Auto-deploy to the game's plugins folder on every build. ContinueOnError
+  <!-- Auto-deploy to the game's plugins folder, DEBUG ONLY. ContinueOnError
        because the DLL is locked while Erenshor is running - if the copy fails,
-       the build still succeeds and the warning tells you to close the game. -->
-  <Target Name="DeployToPlugins" AfterTargets="Build">
+       the build still succeeds and the warning tells you to close the game.
+
+       Deliberately skipped for Release: a Release build is what gets uploaded,
+       and copying it over plugins\ overwrites the copy the Erenshor Vault
+       installed. Lunaris links an installed plugin to its Vault manifest (which
+       is what makes the globe icon point at the mod's Vault page); replacing the
+       file behind its back triggers a hot reload that undoes that link. Build
+       Release to publish, Debug to test locally. -->
+  <Target Name="DeployToPlugins" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
     <Copy SourceFiles="$(TargetPath)"
           DestinationFolder="$(ErenshorPluginsDir)"
           ContinueOnError="WarnAndContinue" />

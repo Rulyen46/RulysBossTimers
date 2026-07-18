@@ -11,7 +11,7 @@ namespace ErenshorBossTimers
     // The plugin name is what Lunaris sanitises into the command prefix
     // (name.Replace(" ","").ToLower()), so "RBT" gives /rbt. It is also the card
     // title, so the full name lives in the description below.
-    [LunarisPlugin("RBT", "1.0.0", "Ruly", "Ruly's Boss Timers - WeakAuras-style boss encounter alerts")]
+    [LunarisPlugin("RBT", "1.0.2", "Ruly", "Ruly's Boss Timers - WeakAuras-style boss encounter alerts")]
     [LunarisPermission(LunarisPermission.None)]
     public class BossTimersPlugin : LunarisPlugin
     {
@@ -160,9 +160,18 @@ namespace ErenshorBossTimers
 
             // Reset the singleton so a hot reload (OnDestroy -> Awake) starts
             // clean. Guarded so a late-destroyed old instance can't wipe a newer one.
-            if (Instance == this) Instance = null;
-
-            UnregisterConfig();
+            //
+            // UnregisterConfig MUST sit inside the same guard. Lunaris gates the
+            // Options button on ConfigHandler.Has(SetPluginName), so removing our
+            // entry while a newer instance is live grays the button out until the
+            // plugin is toggled off and on again. If the reload order is
+            // "new Awake -> old OnDestroy" (which it can be), an unguarded call
+            // here deletes the config the NEW instance just registered.
+            if (Instance == this)
+            {
+                Instance = null;
+                UnregisterConfig();
+            }
 
             Logging.Log("[RBT] Unloaded and cleaned up.");
         }

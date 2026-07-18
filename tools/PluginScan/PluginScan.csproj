@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Dev-only tool. Not part of the mod; never shipped. Verify-Release.ps1
+       builds and runs it, extracting Mono.Cecil from Lunaris.Boot.dll first
+       (see the script) so this project has no NuGet dependencies and works
+       offline. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <AssemblyName>PluginScan</AssemblyName>
+    <RootNamespace>PluginScan</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Extracted from Lunaris.Boot.dll's embedded resources by the script.
+         Deliberately the SAME Cecil build Lunaris itself uses, so this scan
+         reproduces Lunaris's real pre-load behaviour rather than approximating
+         it with a NuGet version that may differ. -->
+    <Reference Include="Mono.Cecil">
+      <HintPath>Mono.Cecil.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
